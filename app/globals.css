@@ -511,12 +511,13 @@ table.data td {
 .face-video-wrap {
   position: relative;
   width: 100%;
+  max-width: 240px;
   aspect-ratio: 4 / 3;
-  border-radius: 14px;
+  border-radius: 12px;
   overflow: hidden;
   background: #0a1a33;
   border: 2px solid var(--gold);
-  margin-bottom: 0.75rem;
+  margin: 0 auto 0.75rem;
 }
 
 .face-video {
@@ -542,15 +543,21 @@ table.data td {
   display: grid;
   place-items: center;
   text-align: center;
-  padding: 1.5rem;
+  padding: 0.75rem;
   background: linear-gradient(180deg, #f8faff, #eef3fb);
   color: var(--ink);
+  font-size: 0.85rem;
+}
+
+.face-video-placeholder h2 {
+  font-size: 1rem !important;
 }
 
 .face-status {
   font-size: 0.9rem;
   color: var(--ink-soft);
   margin: 0 0 0.75rem;
+  text-align: center;
 }
 
 .face-match-banner {
@@ -558,7 +565,11 @@ table.data td {
 }
 
 .face-enroll .face-video-wrap {
-  max-width: 480px;
+  max-width: 220px;
+}
+
+.kiosk-face-wrap {
+  max-width: 220px;
 }
 
 .kiosk-tabs {
