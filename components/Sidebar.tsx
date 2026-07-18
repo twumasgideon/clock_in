@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { BrandBanner } from "@/components/BrandBanner";
 import { canAccess } from "@/lib/rbac";
 import type { Role } from "@/lib/types";
 
@@ -25,13 +26,7 @@ export function Sidebar({ role }: { role: Role }) {
 
   return (
     <aside className="app-sidebar">
-      <div className="brand-block">
-        <p className="brand-mark">APC</p>
-        <div>
-          <p className="brand-name">APC Attendance</p>
-          <p className="brand-sub">Face + Thumbprint</p>
-        </div>
-      </div>
+      <BrandBanner variant="compact" />
       <nav className="side-nav">
         {NAV.filter((item) => canAccess(role, item.area)).map((item) => {
           const active =

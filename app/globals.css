@@ -1,17 +1,23 @@
 @import "tailwindcss";
 
 :root {
-  --ink: #1c2430;
-  --ink-soft: #4a5565;
-  --paper: #f3efe6;
+  --ink: #0f1b2d;
+  --ink-soft: #4a5a72;
+  --paper: #f4f7fc;
   --panel: #ffffff;
-  --accent: #0f5c4c;
-  --accent-strong: #0a4036;
-  --accent-soft: #d7ebe4;
+  --blue: #0b3d91;
+  --blue-deep: #072a66;
+  --blue-soft: #d6e4fb;
+  --gold: #f5c518;
+  --gold-deep: #d4a50a;
+  --gold-soft: #fff4c2;
+  --accent: var(--blue);
+  --accent-strong: var(--blue-deep);
+  --accent-soft: var(--blue-soft);
   --warn: #9a5b12;
-  --line: rgba(28, 36, 48, 0.12);
-  --sidebar: #14352f;
-  --sidebar-text: #dceee8;
+  --line: rgba(11, 61, 145, 0.14);
+  --sidebar: var(--blue-deep);
+  --sidebar-text: #e8f0ff;
   --font-display: "Libre Baskerville", Georgia, serif;
   --font-body: "DM Sans", system-ui, sans-serif;
   --background: var(--paper);
@@ -34,8 +40,9 @@ body {
   color: var(--ink);
   font-family: var(--font-dm-sans), var(--font-body);
   background:
-    radial-gradient(circle at top left, rgba(15, 92, 76, 0.08), transparent 40%),
-    linear-gradient(160deg, var(--paper) 0%, #efe8da 55%, #e4ddd0 100%);
+    radial-gradient(circle at top right, rgba(245, 197, 24, 0.18), transparent 42%),
+    radial-gradient(circle at bottom left, rgba(11, 61, 145, 0.1), transparent 45%),
+    linear-gradient(165deg, #f7f9fd 0%, #eef3fb 55%, #e6edf8 100%);
 }
 
 .brand-mark,
@@ -43,7 +50,8 @@ body {
 .stat-card .value,
 .panel-card h2,
 .panel-card h3,
-.auth-card h1,
+.auth-heading,
+.cop-banner-title,
 .kiosk-stage h2 {
   font-family: var(--font-libre), var(--font-display);
 }
@@ -58,46 +66,46 @@ a {
 }
 
 .app-sidebar {
-  width: 260px;
+  width: 270px;
   flex-shrink: 0;
-  background: var(--sidebar);
+  background: linear-gradient(180deg, var(--blue) 0%, var(--blue-deep) 100%);
   color: var(--sidebar-text);
   padding: 1.5rem 1rem;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
+  border-right: 4px solid var(--gold);
 }
 
 .brand-block {
   display: flex;
   gap: 0.75rem;
   align-items: center;
-  padding: 0 0.5rem;
+  padding: 0.35rem 0.5rem;
 }
 
-.brand-mark {
-  margin: 0;
-  width: 44px;
-  height: 44px;
-  border-radius: 10px;
-  display: grid;
-  place-items: center;
-  background: #1f5f52;
-  color: #fff;
-  font-family: var(--font-display);
-  font-weight: 700;
+.brand-logo {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 50%;
+  padding: 4px;
+  border: 2px solid var(--gold);
 }
 
 .brand-name {
   margin: 0;
-  font-weight: 600;
-  font-size: 0.95rem;
+  font-weight: 700;
+  font-size: 0.88rem;
+  line-height: 1.25;
 }
 
 .brand-sub {
-  margin: 0;
-  font-size: 0.75rem;
-  opacity: 0.7;
+  margin: 0.15rem 0 0;
+  font-size: 0.72rem;
+  opacity: 0.85;
+  color: var(--gold);
 }
 
 .side-nav {
@@ -118,15 +126,19 @@ a {
 
 .side-link:hover,
 .side-link.is-active {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(245, 197, 24, 0.18);
   opacity: 1;
+}
+
+.side-link.is-active {
+  box-shadow: inset 3px 0 0 var(--gold);
 }
 
 .sidebar-foot {
   padding: 0.75rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid rgba(255, 255, 255, 0.15);
   font-size: 0.8rem;
-  opacity: 0.8;
+  opacity: 0.85;
 }
 
 .app-main {
@@ -148,8 +160,8 @@ a {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.72rem;
-  color: var(--ink-soft);
-  font-weight: 600;
+  color: var(--blue);
+  font-weight: 700;
   margin: 0;
 }
 
@@ -158,6 +170,7 @@ a {
   font-family: var(--font-display);
   font-size: 1.65rem;
   font-weight: 700;
+  color: var(--blue-deep);
 }
 
 .topbar-actions {
@@ -212,6 +225,7 @@ a {
   font-family: var(--font-display);
   font-size: 1.8rem;
   margin: 0;
+  color: var(--blue-deep);
 }
 
 .panel-card h2,
@@ -219,6 +233,7 @@ a {
   font-family: var(--font-display);
   font-size: 1.15rem;
   margin: 0 0 0.85rem;
+  color: var(--blue-deep);
 }
 
 .mode-badge {
@@ -249,8 +264,8 @@ a {
   color: var(--warn);
 }
 .mode-syncing {
-  background: #e4ecf8;
-  color: #1f4f8a;
+  background: var(--gold-soft);
+  color: #7a5a00;
 }
 .mode-unknown {
   background: #ececec;
@@ -272,13 +287,13 @@ a {
 }
 
 .btn-accent {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--blue);
+  border-color: var(--blue);
   color: #fff;
 }
 
 .btn-accent:hover {
-  background: var(--accent-strong);
+  background: var(--blue-deep);
 }
 
 .btn-outline {
@@ -288,7 +303,7 @@ a {
 }
 
 .btn-outline:hover {
-  background: rgba(0, 0, 0, 0.03);
+  background: rgba(11, 61, 145, 0.05);
 }
 
 .btn-sm {
@@ -316,6 +331,13 @@ a {
   padding: 0.55rem 0.75rem;
   font: inherit;
   background: #fff;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 2px solid rgba(245, 197, 24, 0.55);
+  border-color: var(--blue);
 }
 
 .table-wrap {
@@ -361,43 +383,119 @@ table.data td {
 }
 
 .alert-success {
-  background: #e5f3ee;
-  color: var(--accent-strong);
+  background: var(--blue-soft);
+  color: var(--blue-deep);
 }
 
 .alert-info {
-  background: #e8eef8;
-  color: #1f4f8a;
+  background: var(--gold-soft);
+  color: #7a5a00;
 }
 
 .auth-page {
   min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
-  background:
-    linear-gradient(135deg, rgba(20, 53, 47, 0.92), rgba(15, 92, 76, 0.75)),
-    url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0 1.25rem 2.5rem;
+  background: linear-gradient(
+    180deg,
+    var(--blue-deep) 0%,
+    var(--blue) 42%,
+    #1a4fa8 70%,
+    #f4f7fc 70%
+  );
+}
+
+.cop-banner {
+  width: 100%;
+  max-width: 720px;
+  margin: 1.75rem 0 1.25rem;
+  padding: 1.35rem 1.5rem;
+  border-radius: 18px;
+  background: linear-gradient(135deg, var(--blue-deep) 0%, var(--blue) 55%, #1556b8 100%);
+  border: 3px solid var(--gold);
+  box-shadow: 0 18px 40px rgba(7, 42, 102, 0.35);
+}
+
+.cop-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.cop-banner-logo {
+  width: 96px;
+  height: 96px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 50%;
+  padding: 8px;
+  border: 3px solid var(--gold);
+  flex-shrink: 0;
+}
+
+.cop-banner-text {
+  min-width: 0;
+  color: #fff;
+}
+
+.cop-banner-org {
+  margin: 0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--gold);
+}
+
+.cop-banner-title {
+  margin: 0.35rem 0 0.4rem;
+  font-size: clamp(1.35rem, 3.5vw, 1.85rem);
+  font-weight: 700;
+  line-height: 1.2;
+  color: #fff;
+}
+
+.cop-banner-tag {
+  margin: 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
 }
 
 .auth-card {
-  width: min(420px, 100%);
+  width: min(440px, 100%);
   background: #fff;
   border-radius: 16px;
-  padding: 2rem;
+  padding: 1.75rem 2rem 2rem;
+  border-top: 5px solid var(--gold);
+  box-shadow: 0 12px 32px rgba(15, 27, 45, 0.12);
 }
 
-.auth-card h1 {
+.auth-heading {
   font-family: var(--font-display);
-  font-size: 1.6rem;
+  font-size: 1.55rem;
   margin: 0 0 0.35rem;
+  color: var(--blue-deep);
+}
+
+.auth-lead {
+  color: var(--ink-soft);
+  margin: 0 0 1.25rem;
+}
+
+.auth-hint {
+  font-size: 0.8rem;
+  color: var(--ink-soft);
+  margin-top: 1rem;
 }
 
 .kiosk-stage {
   min-height: 320px;
   border-radius: 16px;
-  border: 1px dashed rgba(15, 92, 76, 0.35);
-  background: linear-gradient(180deg, #f8f5ef, #efe8da);
+  border: 1px dashed rgba(11, 61, 145, 0.35);
+  background: linear-gradient(180deg, #f8faff, #eef3fb);
   display: grid;
   place-items: center;
   text-align: center;
@@ -407,6 +505,7 @@ table.data td {
 .kiosk-stage h2 {
   font-family: var(--font-display);
   margin: 0 0 0.5rem;
+  color: var(--blue-deep);
 }
 
 .badge {
@@ -418,8 +517,8 @@ table.data td {
 }
 
 .badge-ok {
-  background: #d7ebe4;
-  color: var(--accent-strong);
+  background: var(--blue-soft);
+  color: var(--blue-deep);
 }
 
 .badge-muted {
@@ -455,6 +554,8 @@ table.data td {
   }
   .app-sidebar {
     width: 100%;
+    border-right: none;
+    border-bottom: 4px solid var(--gold);
   }
   .side-nav {
     flex-direction: row;
@@ -473,5 +574,13 @@ table.data td {
   }
   .user-chip {
     display: none;
+  }
+  .cop-banner-inner {
+    flex-direction: column;
+    text-align: center;
+  }
+  .cop-banner-logo {
+    width: 80px;
+    height: 80px;
   }
 }

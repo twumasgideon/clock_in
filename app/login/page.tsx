@@ -3,6 +3,7 @@
 import { signIn } from "next-auth/react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { BrandBanner } from "@/components/BrandBanner";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -31,13 +32,11 @@ export default function LoginPage() {
 
   return (
     <div className="auth-page">
+      <BrandBanner />
       <div className="auth-card">
-        <p className="eyebrow" style={{ color: "var(--ink-soft)" }}>
-          Asokwa Pentecost Church
-        </p>
-        <h1>Sign in</h1>
-        <p style={{ color: "var(--ink-soft)", marginBottom: "1.25rem" }}>
-          Member attendance · face + thumbprint · online &amp; offline
+        <h2 className="auth-heading">Sign in</h2>
+        <p className="auth-lead">
+          Clock in &amp; out · online &amp; offline · face + thumbprint ready
         </p>
         {error && <div className="alert alert-error">{error}</div>}
         <form onSubmit={onSubmit}>
@@ -65,7 +64,7 @@ export default function LoginPage() {
             {loading ? "Signing in…" : "Continue"}
           </button>
         </form>
-        <p style={{ fontSize: "0.8rem", color: "var(--ink-soft)", marginTop: "1rem" }}>
+        <p className="auth-hint">
           Default after seed: admin@asokwa.church / Admin@12345
         </p>
       </div>
