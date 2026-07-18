@@ -44,11 +44,6 @@ export function Sidebar({ role }: { role: Role }) {
           );
         })}
       </nav>
-      <div className="sidebar-foot">
-        <p style={{ fontWeight: 600, marginBottom: 4 }}>Modes</p>
-        <p style={{ margin: 0 }}>Online: live MongoDB write</p>
-        <p style={{ margin: 0 }}>Offline: SyncQueue → push</p>
-      </div>
     </aside>
   );
 }
