@@ -20,7 +20,7 @@ export default async function AppLayout({
       <Sidebar role={session.user.role} />      <div className="app-main">
         <header className="app-topbar">
           <div>
-            <p className="eyebrow">The Church Of Pentecost · Asokwa Assembly — Kumasi</p>
+            <p className="eyebrow">The Church Of Pentecost · Kasse Assembly — Kumasi</p>
             <h1 className="topbar-title">Attendance</h1>
           </div>
           <div className="topbar-actions">

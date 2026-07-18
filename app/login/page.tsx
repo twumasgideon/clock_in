@@ -7,7 +7,7 @@ import { BrandBanner } from "@/components/BrandBanner";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("admin@asokwa.church");
+  const [email, setEmail] = useState("admin@kasse.church");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,7 +65,7 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="auth-hint">
-          Default after seed: admin@asokwa.church / Admin@12345
+          Default after seed: admin@kasse.church / Admin@12345
         </p>
       </div>
     </div>

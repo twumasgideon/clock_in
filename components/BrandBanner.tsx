@@ -18,7 +18,7 @@ export function BrandBanner({ variant = "hero" }: BrandBannerProps) {
         />
         <div>
           <p className="brand-name">The Church of Pentecost</p>
-          <p className="brand-sub">Asokwa Assembly · Kumasi</p>
+          <p className="brand-sub">Kasse Assembly · Kumasi</p>
         </div>
       </div>
     );
@@ -37,7 +37,7 @@ export function BrandBanner({ variant = "hero" }: BrandBannerProps) {
         />
         <div className="cop-banner-text">
           <p className="cop-banner-org">The Church Of Pentecost</p>
-          <h1 className="cop-banner-title">Asokwa Assembly — Kumasi</h1>
+          <h1 className="cop-banner-title">Kasse Assembly — Kumasi</h1>
           <p className="cop-banner-tag">Member Attendance System</p>
         </div>
       </div>

@@ -15,9 +15,9 @@ const libre = Libre_Baskerville({
 });
 
 export const metadata: Metadata = {
-  title: "CoP Asokwa Attendance",
+  title: "CoP Kasse Attendance",
   description:
-    "The Church Of Pentecost — Asokwa Assembly, Kumasi. Member attendance with face + thumbprint, online & offline.",
+    "The Church Of Pentecost — Kasse Assembly, Kumasi. Member attendance with face + thumbprint, online & offline.",
 };
 
 export default function RootLayout({

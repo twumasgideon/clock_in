@@ -1,4 +1,4 @@
-# Asokwa Pentecost Church — Member Attendance System
+# The Church of Pentecost — Kasse Assembly Attendance
 
 Next.js app for biometric attendance (face + thumbprint planned) with **online and offline** kiosk support.
 
@@ -25,10 +25,11 @@ npm run dev
 
 Open http://localhost:3000
 
-| Field    | Value                 |
-|----------|-----------------------|
-| Email    | `admin@asokwa.church` |
-| Password | `Admin@12345`         |
+| Field    | Value               |
+|----------|---------------------|
+| Email    | `admin@kasse.church` |
+| Password | `Admin@12345`       |
+
 
 Change the admin password after first login.
 

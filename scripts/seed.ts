@@ -45,7 +45,7 @@ async function main() {
   console.log("Indexes ready");
 
   const users = await getCollection<UserDoc>("users");
-  const email = "admin@asokwa.church";
+  const email = "admin@kasse.church";
   const password = "Admin@12345";
   const hash = await bcrypt.hash(password, 10);
   const now = new Date();
