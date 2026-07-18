@@ -13,17 +13,6 @@ export const authConfig = {
   },
   providers: [],
   callbacks: {
-    authorized({ auth, request }) {
-      const { pathname } = request.nextUrl;
-      const isLoggedIn = !!auth?.user;
-      const isAuthPage = pathname.startsWith("/login");
-      const isPublicApi =
-        pathname.startsWith("/api/sync") || pathname.startsWith("/api/auth");
-
-      if (isPublicApi) return true;
-      if (isAuthPage) return true;
-      return isLoggedIn;
-    },
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;

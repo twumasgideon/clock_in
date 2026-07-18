@@ -1,12 +1,19 @@
-import NextAuth from "next-auth";
 import { NextResponse } from "next/server";
-import { authConfig } from "@/lib/auth.config";
+import type { NextRequest } from "next/server";
 
-const { auth } = NextAuth(authConfig);
+/** Auth.js session cookie names (Edge-safe — no next-auth/jose imports). */
+function hasSessionCookie(req: NextRequest): boolean {
+  return Boolean(
+    req.cookies.get("authjs.session-token")?.value ||
+      req.cookies.get("__Secure-authjs.session-token")?.value ||
+      req.cookies.get("next-auth.session-token")?.value ||
+      req.cookies.get("__Secure-next-auth.session-token")?.value,
+  );
+}
 
-export default auth((req) => {
+export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-  const isLoggedIn = !!req.auth;
+  const isLoggedIn = hasSessionCookie(req);
   const isAuthPage = pathname.startsWith("/login");
   const isPublicApi =
     pathname.startsWith("/api/sync") || pathname.startsWith("/api/auth");
@@ -24,7 +31,7 @@ export default auth((req) => {
   }
 
   return NextResponse.next();
-});
+}
 
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\..*).*)"],
