@@ -28,8 +28,15 @@ declare module "@auth/core/jwt" {
   }
 }
 
+if (!process.env.AUTH_SECRET && !process.env.NEXTAUTH_SECRET) {
+  console.error(
+    "Missing AUTH_SECRET (or NEXTAUTH_SECRET). Set it in Vercel Environment Variables.",
+  );
+}
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  secret: process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET,
   providers: [
     Credentials({
       name: "Credentials",
