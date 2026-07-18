@@ -32,11 +32,17 @@ export function FaceEnroll({
     setBusy(true);
     setStatus("Loading face models…");
     try {
-      await loadFaceModels();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false,
-      });
+      const [, stream] = await Promise.all([
+        loadFaceModels(),
+        navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+          },
+          audio: false,
+        }),
+      ]);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;

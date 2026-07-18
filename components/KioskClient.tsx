@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
 import {
-  detectAllFaces,
+  createFaceMatcher,
+  detectFaceBox,
+  detectSingleFace,
   loadFaceModels,
-  matchFace,
+  matchWithMatcher,
   type EnrolledFace,
   type FaceMatch,
 } from "@/lib/face";
@@ -15,6 +16,7 @@ import {
   type ThumbMatch,
 } from "@/lib/thumbprint";
 import { kioskClock } from "@/app/actions";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 type Member = {
   id: string;
@@ -78,6 +80,15 @@ export function KioskClient({
   const [serviceId, setServiceId] = useState(services[0]?.id ?? "");
   const [manualMemberId, setManualMemberId] = useState(members[0]?.id ?? "");
 
+  const faceMatcher = useMemo(
+    () => createFaceMatcher(enrolledFaces),
+    [enrolledFaces],
+  );
+
+  useEffect(() => {
+    void loadFaceModels().catch(() => {});
+  }, []);
+
   useEffect(() => {
     const apply = () => setMode(navigator.onLine ? "online" : "offline");
     apply();
@@ -109,79 +120,112 @@ export function KioskClient({
     if (!cameraOn || session !== "face") return;
     let alive = true;
     scanningRef.current = true;
+    let frame = 0;
+    let lastMatchId: string | null = null;
+    let canvasSized = false;
 
-    const loop = async () => {
+    const drawBox = (
+      canvas: HTMLCanvasElement,
+      video: HTMLVideoElement,
+      box: { x: number; y: number; width: number; height: number } | null,
+    ) => {
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return;
+      if (!canvasSized) {
+        canvas.width = video.videoWidth || 320;
+        canvas.height = video.videoHeight || 240;
+        canvasSized = true;
+      }
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      if (box) {
+        ctx.strokeStyle = "#f5c518";
+        ctx.lineWidth = 3;
+        ctx.strokeRect(box.x, box.y, box.width, box.height);
+      }
+    };
+
+    const tick = async () => {
       while (alive && scanningRef.current) {
         const video = videoRef.current;
         const canvas = canvasRef.current;
         if (video && canvas && video.readyState >= 2) {
           try {
-            const faces = await detectAllFaces(video);
-            const ctx = canvas.getContext("2d");
-            canvas.width = video.videoWidth || 640;
-            canvas.height = video.videoHeight || 480;
-            if (ctx) {
-              ctx.clearRect(0, 0, canvas.width, canvas.height);
-              for (const face of faces) {
-                ctx.strokeStyle = "#f5c518";
-                ctx.lineWidth = 3;
-                ctx.strokeRect(
-                  face.box.x,
-                  face.box.y,
-                  face.box.width,
-                  face.box.height,
-                );
-              }
-            }
+            frame += 1;
+            const doMatch = frame % 3 === 0;
 
-            if (faces.length === 0) {
-              setMatch(null);
-              setCameraStatus("Looking for a face…");
-            } else if (faces.length > 1) {
-              setMatch(null);
-              setCameraStatus("Multiple faces detected — one person at a time");
-            } else if (!enrolledFaces.length) {
-              setMatch(null);
-              setCameraStatus("No enrolled faces yet. Enroll members first.");
-            } else {
-              const found = matchFace(faces[0].descriptor, enrolledFaces);
-              if (found) {
-                setMatch(found);
-                setCameraStatus(
-                  `Matched: ${found.label} (${(1 - found.distance).toFixed(2)} confidence)`,
-                );
-              } else {
+            if (doMatch) {
+              const face = await detectSingleFace(video);
+              drawBox(canvas, video, face?.box ?? null);
+
+              if (!face) {
+                if (lastMatchId) {
+                  lastMatchId = null;
+                  setMatch(null);
+                }
+                setCameraStatus("Looking for a face…");
+              } else if (!faceMatcher || !enrolledFaces.length) {
+                setCameraStatus("No enrolled faces yet. Enroll members first.");
                 setMatch(null);
-                setCameraStatus("Face seen — no enrolled match");
+                lastMatchId = null;
+              } else {
+                const found = matchWithMatcher(
+                  face.descriptor,
+                  faceMatcher,
+                  enrolledFaces,
+                );
+                if (found) {
+                  if (found.id !== lastMatchId) {
+                    lastMatchId = found.id;
+                    setMatch(found);
+                  }
+                  setCameraStatus(`Matched: ${found.label}`);
+                } else {
+                  if (lastMatchId) {
+                    lastMatchId = null;
+                    setMatch(null);
+                  }
+                  setCameraStatus("Face seen — no enrolled match");
+                }
+              }
+            } else {
+              const box = await detectFaceBox(video);
+              drawBox(canvas, video, box);
+              if (!box && lastMatchId) {
+                lastMatchId = null;
+                setMatch(null);
+                setCameraStatus("Looking for a face…");
               }
             }
           } catch {
             setCameraStatus("Detection error — retrying…");
           }
         }
-        await new Promise((r) => setTimeout(r, 450));
+        await new Promise((r) => setTimeout(r, 40));
       }
     };
 
-    void loop();
+    void tick();
     return () => {
       alive = false;
       scanningRef.current = false;
     };
-  }, [cameraOn, enrolledFaces, session]);
+  }, [cameraOn, enrolledFaces, faceMatcher, session]);
 
   async function startCamera() {
-    setCameraStatus("Loading face models…");
+    setCameraStatus("Starting camera…");
     try {
-      await loadFaceModels();
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: "user",
-          width: { ideal: 640 },
-          height: { ideal: 480 },
-        },
-        audio: false,
-      });
+      const [, stream] = await Promise.all([
+        loadFaceModels(),
+        navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: "user",
+            width: { ideal: 320 },
+            height: { ideal: 240 },
+            frameRate: { ideal: 24 },
+          },
+          audio: false,
+        }),
+      ]);
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
