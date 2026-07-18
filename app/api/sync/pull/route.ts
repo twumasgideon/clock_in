@@ -57,6 +57,7 @@ export async function GET(req: Request) {
         face_template_ref: 1,
         face_descriptor: 1,
         fingerprint_template_ref: 1,
+        fingerprint_descriptor: 1,
         updated_at: 1,
       })
       .sort({ updated_at: 1 })

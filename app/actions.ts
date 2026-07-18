@@ -231,6 +231,79 @@ export async function clearMemberFace(memberId: string) {
   return { ok: true as const };
 }
 
+export async function enrollMemberThumbprint(
+  memberId: string,
+  descriptor: number[],
+) {
+  const session = await requireRole("admin", "officer");
+  if (!ObjectId.isValid(memberId)) {
+    return { ok: false as const, error: "Invalid member" };
+  }
+  if (!Array.isArray(descriptor) || descriptor.length < 32) {
+    return { ok: false as const, error: "Invalid thumbprint descriptor" };
+  }
+
+  const clean = descriptor.map((n) => Number(n)).filter((n) => Number.isFinite(n));
+  if (clean.length < 32) {
+    return { ok: false as const, error: "Invalid thumbprint descriptor" };
+  }
+
+  const members = await getCollection<MemberDoc>("members");
+  await members.updateOne(
+    { _id: new ObjectId(memberId) },
+    {
+      $set: {
+        enrolled_fingerprint: true,
+        fingerprint_descriptor: clean,
+        fingerprint_template_ref: `local-thumb:${memberId}`,
+        updated_at: new Date(),
+        synced_at: null,
+      },
+    },
+  );
+  await writeAudit({
+    actor_user_id: session.user.id,
+    action: "member.enroll_thumbprint",
+    entity_type: "members",
+    entity_id: memberId,
+  });
+  revalidatePath(`/members/${memberId}`);
+  revalidatePath("/members");
+  revalidatePath("/kiosk");
+  return { ok: true as const };
+}
+
+export async function clearMemberThumbprint(memberId: string) {
+  const session = await requireRole("admin", "officer");
+  if (!ObjectId.isValid(memberId)) {
+    return { ok: false as const, error: "Invalid member" };
+  }
+
+  const members = await getCollection<MemberDoc>("members");
+  await members.updateOne(
+    { _id: new ObjectId(memberId) },
+    {
+      $set: {
+        enrolled_fingerprint: false,
+        fingerprint_descriptor: null,
+        fingerprint_template_ref: null,
+        updated_at: new Date(),
+        synced_at: null,
+      },
+    },
+  );
+  await writeAudit({
+    actor_user_id: session.user.id,
+    action: "member.clear_thumbprint",
+    entity_type: "members",
+    entity_id: memberId,
+  });
+  revalidatePath(`/members/${memberId}`);
+  revalidatePath("/members");
+  revalidatePath("/kiosk");
+  return { ok: true as const };
+}
+
 export async function kioskClock(formData: FormData) {
   const session = await requireRole("admin", "officer");
   const action = String(formData.get("action") ?? "clock_in");
@@ -238,7 +311,8 @@ export async function kioskClock(formData: FormData) {
   const serviceId = String(formData.get("service_id") ?? "");
   const forceOffline = formData.get("force_offline") === "1";
   const verifyRaw = String(formData.get("verify_method") ?? "manual");
-  const verifyMethod = verifyRaw === "face" ? "face" : "manual";
+  const verifyMethod =
+    verifyRaw === "face" || verifyRaw === "thumbprint" ? verifyRaw : "manual";
   let clientEventId = String(formData.get("client_event_id") ?? "");
   if (!clientEventId) clientEventId = randomBytes(16).toString("hex");
 

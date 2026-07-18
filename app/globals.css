@@ -561,6 +561,63 @@ table.data td {
   max-width: 480px;
 }
 
+.kiosk-tabs {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+  padding: 0.25rem;
+  background: var(--blue-soft);
+  border-radius: 10px;
+}
+
+.kiosk-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--blue-deep);
+  font: inherit;
+  font-weight: 600;
+  padding: 0.55rem 0.75rem;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.kiosk-tab.is-active {
+  background: var(--blue);
+  color: #fff;
+  box-shadow: 0 2px 0 var(--gold);
+}
+
+.thumb-pad-wrap {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+
+.kiosk-thumb-wrap {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.thumb-pad {
+  width: min(280px, 100%);
+  height: auto;
+  aspect-ratio: 280 / 320;
+  border-radius: 16px;
+  border: 3px solid var(--gold);
+  background: #f4f7fc;
+  touch-action: none;
+  cursor: crosshair;
+  display: block;
+}
+
+.thumb-enrolled-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+}
+
 .badge {
   display: inline-block;
   border-radius: 999px;

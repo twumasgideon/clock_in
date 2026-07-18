@@ -30,6 +30,7 @@ export type MemberDoc = {
   face_template_ref?: string | null;
   face_descriptor?: number[] | null;
   fingerprint_template_ref?: string | null;
+  fingerprint_descriptor?: number[] | null;
   notes?: string | null;
   created_at: Date;
   updated_at: Date;

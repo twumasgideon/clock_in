@@ -7,6 +7,7 @@ import type { MemberDoc } from "@/lib/models";
 import { serializeDoc } from "@/lib/types";
 import { updateMember } from "@/app/actions";
 import { FaceEnroll } from "@/components/FaceEnroll";
+import { ThumbEnroll } from "@/components/ThumbEnroll";
 
 export default async function EditMemberPage({
   params,
@@ -100,6 +101,14 @@ export default async function EditMemberPage({
       <FaceEnroll
         memberId={id}
         enrolled={Boolean(member.enrolled_face && member.face_descriptor?.length)}
+        memberName={fullName}
+      />
+
+      <ThumbEnroll
+        memberId={id}
+        enrolled={Boolean(
+          member.enrolled_fingerprint && member.fingerprint_descriptor?.length,
+        )}
         memberName={fullName}
       />
     </div>

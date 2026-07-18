@@ -47,6 +47,19 @@ export default async function KioskPage({
       descriptor: m.face_descriptor as number[],
     }));
 
+  const enrolledThumbs = memberDocs
+    .filter(
+      (m) =>
+        m.enrolled_fingerprint &&
+        Array.isArray(m.fingerprint_descriptor) &&
+        m.fingerprint_descriptor.length,
+    )
+    .map((m) => ({
+      id: String(m._id),
+      label: `${m.first_name} ${m.last_name} (${m.member_code})`,
+      descriptor: m.fingerprint_descriptor as number[],
+    }));
+
   const device = serializeDoc(
     await (await getCollection<DeviceDoc>("devices")).findOne(
       { is_active: true },
@@ -67,6 +80,7 @@ export default async function KioskPage({
         services={services}
         device={device}
         enrolledFaces={enrolledFaces}
+        enrolledThumbs={enrolledThumbs}
       />
     </>
   );
