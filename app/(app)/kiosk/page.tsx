@@ -24,13 +24,28 @@ export default async function KioskPage({
     starts_at: new Date(s.starts_at).toISOString(),
   }));
 
-  const members = serializeDocs(
-    await (await getCollection<MemberDoc>("members"))
-      .find({ membership_status: "active" })
-      .sort({ last_name: 1, first_name: 1 })
-      .limit(500)
-      .toArray(),
-  );
+  const memberDocs = await (
+    await getCollection<MemberDoc>("members")
+  )
+    .find({ membership_status: "active" })
+    .sort({ last_name: 1, first_name: 1 })
+    .limit(500)
+    .toArray();
+
+  const members = serializeDocs(memberDocs);
+
+  const enrolledFaces = memberDocs
+    .filter(
+      (m) =>
+        m.enrolled_face &&
+        Array.isArray(m.face_descriptor) &&
+        m.face_descriptor.length,
+    )
+    .map((m) => ({
+      id: String(m._id),
+      label: `${m.first_name} ${m.last_name} (${m.member_code})`,
+      descriptor: m.face_descriptor as number[],
+    }));
 
   const device = serializeDoc(
     await (await getCollection<DeviceDoc>("devices")).findOne(
@@ -47,7 +62,12 @@ export default async function KioskPage({
           Queued offline. Process under Devices & Sync when ready.
         </div>
       )}
-      <KioskClient members={members} services={services} device={device} />
+      <KioskClient
+        members={members}
+        services={services}
+        device={device}
+        enrolledFaces={enrolledFaces}
+      />
     </>
   );
 }

@@ -55,6 +55,7 @@ export async function GET(req: Request) {
         enrolled_face: 1,
         enrolled_fingerprint: 1,
         face_template_ref: 1,
+        face_descriptor: 1,
         fingerprint_template_ref: 1,
         updated_at: 1,
       })

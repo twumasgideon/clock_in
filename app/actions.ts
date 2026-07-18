@@ -161,12 +161,84 @@ export async function createUser(formData: FormData) {
   redirect("/users");
 }
 
+export async function enrollMemberFace(memberId: string, descriptor: number[]) {
+  const session = await requireRole("admin", "officer");
+  if (!ObjectId.isValid(memberId)) {
+    return { ok: false as const, error: "Invalid member" };
+  }
+  if (!Array.isArray(descriptor) || descriptor.length < 64) {
+    return { ok: false as const, error: "Invalid face descriptor" };
+  }
+
+  const clean = descriptor.map((n) => Number(n)).filter((n) => Number.isFinite(n));
+  if (clean.length < 64) {
+    return { ok: false as const, error: "Invalid face descriptor" };
+  }
+
+  const members = await getCollection<MemberDoc>("members");
+  await members.updateOne(
+    { _id: new ObjectId(memberId) },
+    {
+      $set: {
+        enrolled_face: true,
+        face_descriptor: clean,
+        face_template_ref: `local:${memberId}`,
+        updated_at: new Date(),
+        synced_at: null,
+      },
+    },
+  );
+  await writeAudit({
+    actor_user_id: session.user.id,
+    action: "member.enroll_face",
+    entity_type: "members",
+    entity_id: memberId,
+  });
+  revalidatePath(`/members/${memberId}`);
+  revalidatePath("/members");
+  revalidatePath("/kiosk");
+  return { ok: true as const };
+}
+
+export async function clearMemberFace(memberId: string) {
+  const session = await requireRole("admin", "officer");
+  if (!ObjectId.isValid(memberId)) {
+    return { ok: false as const, error: "Invalid member" };
+  }
+
+  const members = await getCollection<MemberDoc>("members");
+  await members.updateOne(
+    { _id: new ObjectId(memberId) },
+    {
+      $set: {
+        enrolled_face: false,
+        face_descriptor: null,
+        face_template_ref: null,
+        updated_at: new Date(),
+        synced_at: null,
+      },
+    },
+  );
+  await writeAudit({
+    actor_user_id: session.user.id,
+    action: "member.clear_face",
+    entity_type: "members",
+    entity_id: memberId,
+  });
+  revalidatePath(`/members/${memberId}`);
+  revalidatePath("/members");
+  revalidatePath("/kiosk");
+  return { ok: true as const };
+}
+
 export async function kioskClock(formData: FormData) {
   const session = await requireRole("admin", "officer");
   const action = String(formData.get("action") ?? "clock_in");
   const memberId = String(formData.get("member_id") ?? "");
   const serviceId = String(formData.get("service_id") ?? "");
   const forceOffline = formData.get("force_offline") === "1";
+  const verifyRaw = String(formData.get("verify_method") ?? "manual");
+  const verifyMethod = verifyRaw === "face" ? "face" : "manual";
   let clientEventId = String(formData.get("client_event_id") ?? "");
   if (!clientEventId) clientEventId = randomBytes(16).toString("hex");
 
@@ -193,7 +265,7 @@ export async function kioskClock(formData: FormData) {
         payload: {
           member_id: memberId,
           service_id: serviceId,
-          verify_method: "manual",
+          verify_method: verifyMethod,
           status: "present",
           action,
         },
@@ -208,7 +280,7 @@ export async function kioskClock(formData: FormData) {
     await writeAudit({
       actor_user_id: session.user.id,
       action: "kiosk.offline_queue",
-      meta: { memberId, serviceId },
+      meta: { memberId, serviceId, verifyMethod },
     });
     revalidatePath("/kiosk");
     revalidatePath("/devices");
@@ -226,7 +298,7 @@ export async function kioskClock(formData: FormData) {
     await writeAudit({
       actor_user_id: session.user.id,
       action: "kiosk.clock_out",
-      meta: { memberId, serviceId },
+      meta: { memberId, serviceId, verifyMethod },
     });
   } else {
     const service = await services.findOne({ _id: new ObjectId(serviceId) });
@@ -248,6 +320,7 @@ export async function kioskClock(formData: FormData) {
           $set: {
             clock_in_at: existing.clock_in_at ?? now,
             status,
+            verify_method: verifyMethod,
             updated_at: now,
           },
         },
@@ -259,7 +332,7 @@ export async function kioskClock(formData: FormData) {
         clock_in_at: now,
         clock_out_at: null,
         status,
-        verify_method: "manual",
+        verify_method: verifyMethod,
         source_mode: "online",
         device_id: device ? toId(device._id) : null,
         client_event_id: clientEventId,
@@ -272,7 +345,7 @@ export async function kioskClock(formData: FormData) {
     await writeAudit({
       actor_user_id: session.user.id,
       action: "kiosk.clock_in",
-      meta: { memberId, serviceId, status },
+      meta: { memberId, serviceId, status, verifyMethod },
     });
   }
 

@@ -28,6 +28,7 @@ export type MemberDoc = {
   enrolled_face: boolean;
   enrolled_fingerprint: boolean;
   face_template_ref?: string | null;
+  face_descriptor?: number[] | null;
   fingerprint_template_ref?: string | null;
   notes?: string | null;
   created_at: Date;
