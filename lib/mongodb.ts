@@ -17,15 +17,15 @@ function getDbName(): string {
 }
 
 function getClientPromise(): Promise<MongoClient> {
-  if (process.env.NODE_ENV === "development") {
-    if (!global._mongoClientPromise) {
-      const client = new MongoClient(getUri());
-      global._mongoClientPromise = client.connect();
-    }
-    return global._mongoClientPromise;
+  // Reuse across hot reloads (dev) and warm serverless invokes (Vercel).
+  if (!global._mongoClientPromise) {
+    const client = new MongoClient(getUri(), {
+      maxPoolSize: 10,
+      serverSelectionTimeoutMS: 10000,
+    });
+    global._mongoClientPromise = client.connect();
   }
-  const client = new MongoClient(getUri());
-  return client.connect();
+  return global._mongoClientPromise;
 }
 
 export async function getClient(): Promise<MongoClient> {

@@ -16,18 +16,33 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const res = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
-    setLoading(false);
-    if (res?.error) {
-      setError("Invalid credentials or inactive account.");
-      return;
+    try {
+      const res = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      });
+      if (res?.error) {
+        if (res.error === "CredentialsSignin") {
+          setError("Invalid credentials or inactive account.");
+        } else {
+          setError(
+            `Sign-in failed (${res.error}). Check AUTH_SECRET, AUTH_URL, and MongoDB on Vercel.`,
+          );
+        }
+        return;
+      }
+      if (!res?.ok) {
+        setError("Sign-in failed. Please try again.");
+        return;
+      }
+      router.push("/");
+      router.refresh();
+    } catch {
+      setError("Network error during sign-in. Please try again.");
+    } finally {
+      setLoading(false);
     }
-    router.push("/");
-    router.refresh();
   }
 
   return (

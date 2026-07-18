@@ -51,24 +51,29 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         const password = String(credentials?.password ?? "");
         if (!email || !password) return null;
 
-        const users = await getCollection<UserDoc>("users");
-        const user = await users.findOne({ email });
-        if (!user || !user.is_active) return null;
+        try {
+          const users = await getCollection<UserDoc>("users");
+          const user = await users.findOne({ email });
+          if (!user || !user.is_active) return null;
 
-        const ok = await bcrypt.compare(password, user.password_hash);
-        if (!ok) return null;
+          const ok = await bcrypt.compare(password, user.password_hash);
+          if (!ok) return null;
 
-        await users.updateOne(
-          { _id: user._id },
-          { $set: { last_login_at: new Date(), updated_at: new Date() } },
-        );
+          await users.updateOne(
+            { _id: user._id },
+            { $set: { last_login_at: new Date(), updated_at: new Date() } },
+          );
 
-        return {
-          id: toId(user._id),
-          email: user.email,
-          name: user.full_name,
-          role: user.role,
-        };
+          return {
+            id: toId(user._id),
+            email: user.email,
+            name: user.full_name,
+            role: user.role,
+          };
+        } catch (err) {
+          console.error("authorize failed:", err);
+          throw new Error("Database unavailable. Check MONGODB_URI and Atlas Network Access.");
+        }
       },
     }),
   ],
