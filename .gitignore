@@ -1,0 +1,11 @@
+.env
+/vendor/
+composer.phar
+
+/storage/local/*
+!/storage/local/.gitkeep
+/storage/backups/*
+!/storage/backups/.gitkeep
+*.log
+.DS_Store
+Thumbs.db
