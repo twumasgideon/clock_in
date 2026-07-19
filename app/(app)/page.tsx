@@ -1,12 +1,25 @@
 import Link from "next/link";
 import { requireSession } from "@/lib/session";
 import { getCollection } from "@/lib/mongodb";
-import type { AttendanceDoc, MemberDoc, ServiceDoc, DeviceDoc, SyncQueueDoc } from "@/lib/models";
+import type {
+  AttendanceDoc,
+  MemberDoc,
+  ServiceDoc,
+  DeviceDoc,
+  SyncQueueDoc,
+} from "@/lib/models";
 import { serializeDocs, toId } from "@/lib/types";
 import { ObjectId } from "mongodb";
+import {
+  buildFollowUpReport,
+  findLatestFollowUpService,
+  shouldAutoPopup,
+} from "@/lib/follow-up";
+import { FollowUpPopup } from "@/components/FollowUpPopup";
+import { canAccess } from "@/lib/rbac";
 
 export default async function DashboardPage() {
-  await requireSession();
+  const session = await requireSession();
 
   const members = await getCollection<MemberDoc>("members");
   const attendance = await getCollection<AttendanceDoc>("attendance");
@@ -20,30 +33,37 @@ export default async function DashboardPage() {
   end.setDate(end.getDate() + 1);
   const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  const [memberCount, todayCount, serviceCount, pendingSync, deviceList, recentRaw, upcoming] =
-    await Promise.all([
-      members.countDocuments({ membership_status: "active" }),
-      attendance.countDocuments({
-        clock_in_at: { $gte: start, $lt: end },
-      }),
-      services.countDocuments({
+  const [
+    memberCount,
+    todayCount,
+    serviceCount,
+    pendingSync,
+    deviceList,
+    recentRaw,
+    upcoming,
+  ] = await Promise.all([
+    members.countDocuments({ membership_status: "active" }),
+    attendance.countDocuments({
+      clock_in_at: { $gte: start, $lt: end },
+    }),
+    services.countDocuments({
+      is_active: true,
+      starts_at: { $gte: dayAgo },
+    }),
+    syncQueue.countDocuments({
+      status: { $in: ["pending", "processing", "failed"] },
+    }),
+    devices.find({ is_active: true }).toArray(),
+    attendance.find({}).sort({ clock_in_at: -1 }).limit(8).toArray(),
+    services
+      .find({
         is_active: true,
-        starts_at: { $gte: dayAgo },
-      }),
-      syncQueue.countDocuments({
-        status: { $in: ["pending", "processing", "failed"] },
-      }),
-      devices.find({ is_active: true }).toArray(),
-      attendance.find({}).sort({ clock_in_at: -1 }).limit(8).toArray(),
-      services
-        .find({
-          is_active: true,
-          starts_at: { $gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
-        })
-        .sort({ starts_at: 1 })
-        .limit(5)
-        .toArray(),
-    ]);
+        starts_at: { $gte: new Date(Date.now() - 2 * 60 * 60 * 1000) },
+      })
+      .sort({ starts_at: 1 })
+      .limit(5)
+      .toArray(),
+  ]);
 
   const online = deviceList.filter((d) => d.mode === "online").length;
   const offline = deviceList.filter((d) => d.mode === "offline").length;
@@ -95,8 +115,43 @@ export default async function DashboardPage() {
     };
   });
 
+  const showFollowUpNav = canAccess(session.user.role, "follow-up");
+  let popup: {
+    serviceId: string;
+    serviceTitle: string;
+    presentCount: number;
+    absentCount: number;
+    withPhoneAbsent: number;
+  } | null = null;
+
+  if (showFollowUpNav) {
+    const latest = await findLatestFollowUpService();
+    if (latest && shouldAutoPopup(new Date(latest.starts_at))) {
+      const report = await buildFollowUpReport(latest.id);
+      if (report) {
+        popup = {
+          serviceId: report.service.id,
+          serviceTitle: report.service.title,
+          presentCount: report.presentCount,
+          absentCount: report.absentCount,
+          withPhoneAbsent: report.withPhoneAbsent,
+        };
+      }
+    }
+  }
+
   return (
     <>
+      {popup && (
+        <FollowUpPopup
+          serviceId={popup.serviceId}
+          serviceTitle={popup.serviceTitle}
+          presentCount={popup.presentCount}
+          absentCount={popup.absentCount}
+          withPhoneAbsent={popup.withPhoneAbsent}
+        />
+      )}
+
       <div className="stat-grid" style={{ marginBottom: "1rem" }}>
         <div className="stat-card">
           <div className="label">Active members</div>
@@ -115,6 +170,30 @@ export default async function DashboardPage() {
           <p className="value">{pendingSync}</p>
         </div>
       </div>
+
+      {showFollowUpNav && (
+        <div className="panel-card" style={{ marginBottom: "1rem" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: "1rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h2 style={{ margin: 0 }}>Member follow-up</h2>
+              <p className="empty-hint" style={{ margin: "0.35rem 0 0" }}>
+                After service: present &amp; absent lists with registered phones.
+              </p>
+            </div>
+            <Link href="/follow-up" className="btn btn-accent">
+              Open follow-up
+            </Link>
+          </div>
+        </div>
+      )}
 
       <div className="grid-2">
         <div className="panel-card">
@@ -153,7 +232,12 @@ export default async function DashboardPage() {
                         <strong>
                           {row.first_name} {row.last_name}
                         </strong>
-                        <div style={{ fontSize: "0.8rem", color: "var(--ink-soft)" }}>
+                        <div
+                          style={{
+                            fontSize: "0.8rem",
+                            color: "var(--ink-soft)",
+                          }}
+                        >
                           {row.member_code}
                         </div>
                       </td>

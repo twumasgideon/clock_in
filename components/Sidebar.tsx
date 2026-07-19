@@ -15,6 +15,7 @@ const NAV: {
   { href: "/members", label: "Members", area: "members" },
   { href: "/services", label: "Services", area: "services" },
   { href: "/attendance", label: "Attendance", area: "attendance" },
+  { href: "/follow-up", label: "Follow-up", area: "follow-up" },
   { href: "/kiosk", label: "Kiosk", area: "kiosk" },
   { href: "/devices", label: "Devices & Sync", area: "devices" },
   { href: "/reports", label: "Reports", area: "reports" },

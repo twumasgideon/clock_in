@@ -5,6 +5,7 @@ const ROLE_ACCESS: Record<string, Role[]> = {
   members: ["admin", "officer"],
   services: ["admin", "officer", "pastor"],
   attendance: ["admin", "officer", "pastor"],
+  "follow-up": ["admin", "officer", "pastor"],
   kiosk: ["admin", "officer"],
   devices: ["admin"],
   reports: ["admin", "officer", "pastor"],
