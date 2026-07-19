@@ -18,6 +18,7 @@ const NAV: {
   { href: "/kiosk", label: "Kiosk", area: "kiosk" },
   { href: "/devices", label: "Devices & Sync", area: "devices" },
   { href: "/reports", label: "Reports", area: "reports" },
+  { href: "/admin", label: "Admin", area: "admin" },
   { href: "/users", label: "Users", area: "users" },
 ];
 

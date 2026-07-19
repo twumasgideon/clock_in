@@ -9,6 +9,7 @@ const ROLE_ACCESS: Record<string, Role[]> = {
   devices: ["admin"],
   reports: ["admin", "officer", "pastor"],
   users: ["admin"],
+  admin: ["admin", "pastor"],
 };
 
 export function canAccess(role: string | undefined | null, area: keyof typeof ROLE_ACCESS): boolean {

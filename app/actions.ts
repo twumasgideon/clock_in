@@ -6,10 +6,20 @@ import { ObjectId } from "mongodb";
 import bcrypt from "bcryptjs";
 import { requireRole } from "@/lib/session";
 import { getCollection } from "@/lib/mongodb";
-import type { MemberDoc, ServiceDoc, UserDoc, AttendanceDoc, DeviceDoc, SyncQueueDoc } from "@/lib/models";
+import type {
+  MemberDoc,
+  ServiceDoc,
+  UserDoc,
+  AttendanceDoc,
+  DeviceDoc,
+  SyncQueueDoc,
+  IncomeEntryDoc,
+  NoticeDoc,
+} from "@/lib/models";
 import { writeAudit } from "@/lib/audit";
 import { createHash, randomBytes } from "crypto";
 import { toId } from "@/lib/types";
+import { sendSmsToPhones } from "@/lib/sms";
 
 export async function createMember(formData: FormData) {
   const session = await requireRole("admin", "officer");
@@ -560,4 +570,128 @@ export async function processSyncQueue() {
   revalidatePath("/attendance");
   revalidatePath("/");
   redirect(`/devices?processed=${applied}`);
+}
+
+function startOfDay(d: Date): Date {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x;
+}
+
+function startOfWeek(d: Date): Date {
+  const x = startOfDay(d);
+  const day = x.getDay(); // 0 Sun
+  const diff = day === 0 ? -6 : 1 - day; // Monday start
+  x.setDate(x.getDate() + diff);
+  return x;
+}
+
+export async function createIncomeEntry(formData: FormData) {
+  const session = await requireRole("admin", "pastor");
+  const periodRaw = String(formData.get("period") ?? "day");
+  const period = periodRaw === "week" ? "week" : "day";
+  const activityTitle = String(formData.get("activity_title") ?? "").trim();
+  const activityType = String(formData.get("activity_type") ?? "offering");
+  const amount = Number(formData.get("amount") ?? 0);
+  const periodDate = String(formData.get("period_date") ?? "");
+  const notes = String(formData.get("notes") ?? "").trim() || null;
+
+  if (!activityTitle || !periodDate || !Number.isFinite(amount) || amount < 0) {
+    redirect("/admin?error=income");
+  }
+
+  const base = new Date(periodDate);
+  if (Number.isNaN(base.getTime())) redirect("/admin?error=income");
+
+  const periodStart = period === "week" ? startOfWeek(base) : startOfDay(base);
+  const allowedTypes = ["event", "activity", "offering", "other"] as const;
+  const type = allowedTypes.includes(activityType as (typeof allowedTypes)[number])
+    ? (activityType as IncomeEntryDoc["activity_type"])
+    : "other";
+
+  const now = new Date();
+  const incomes = await getCollection<IncomeEntryDoc>("income_entries");
+  const result = await incomes.insertOne({
+    period,
+    period_start: periodStart,
+    activity_title: activityTitle,
+    activity_type: type,
+    amount,
+    currency: "GHS",
+    notes,
+    recorded_by_user_id: session.user.id,
+    created_at: now,
+    updated_at: now,
+  });
+
+  await writeAudit({
+    actor_user_id: session.user.id,
+    action: "income.create",
+    entity_type: "income_entries",
+    entity_id: result.insertedId.toHexString(),
+    meta: { period, amount, activityTitle },
+  });
+
+  revalidatePath("/admin");
+  redirect("/admin?income=1");
+}
+
+export async function createNotice(formData: FormData) {
+  const session = await requireRole("admin", "pastor");
+  const title = String(formData.get("title") ?? "").trim();
+  const body = String(formData.get("body") ?? "").trim();
+  const sendSms = formData.get("send_sms") === "1";
+
+  if (!title || !body) redirect("/admin?error=notice");
+
+  const smsText = `CoP Kasse: ${title}\n${body}`.slice(0, 320);
+  let smsSent = 0;
+  let smsFailed = 0;
+  let smsSkipped = 0;
+
+  if (sendSms) {
+    const members = await getCollection<MemberDoc>("members");
+    const withPhone = await members
+      .find({
+        membership_status: "active",
+        phone: { $exists: true, $nin: [null, ""] },
+      })
+      .project({ phone: 1 })
+      .toArray();
+    const phones = withPhone.map((m) => String(m.phone));
+    const result = await sendSmsToPhones(phones, smsText);
+    smsSent = result.sent;
+    smsFailed = result.failed;
+    smsSkipped = result.skipped;
+  }
+
+  const now = new Date();
+  const notices = await getCollection<NoticeDoc>("notices");
+  const result = await notices.insertOne({
+    title,
+    body,
+    audience: "all",
+    created_by_user_id: session.user.id,
+    created_by_name: session.user.name,
+    sms_requested: sendSms,
+    sms_sent: smsSent,
+    sms_failed: smsFailed,
+    sms_skipped: smsSkipped,
+    created_at: now,
+  });
+
+  await writeAudit({
+    actor_user_id: session.user.id,
+    action: "notice.create",
+    entity_type: "notices",
+    entity_id: result.insertedId.toHexString(),
+    meta: { sendSms, smsSent, smsFailed, smsSkipped },
+  });
+
+  revalidatePath("/admin");
+  revalidatePath("/users");
+  revalidatePath("/");
+  redirect(
+    `/admin?notice=1&sms_sent=${smsSent}&sms_failed=${smsFailed}&sms_skipped=${smsSkipped}`,
+  );
 }

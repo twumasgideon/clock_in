@@ -108,3 +108,31 @@ export type AuditLogDoc = {
   ip_address?: string | null;
   created_at: Date;
 };
+
+export type IncomeEntryDoc = {
+  _id?: ObjectId;
+  period: "day" | "week";
+  period_start: Date;
+  activity_title: string;
+  activity_type: "event" | "activity" | "offering" | "other";
+  amount: number;
+  currency: string;
+  notes?: string | null;
+  recorded_by_user_id: string;
+  created_at: Date;
+  updated_at: Date;
+};
+
+export type NoticeDoc = {
+  _id?: ObjectId;
+  title: string;
+  body: string;
+  audience: "users" | "members" | "all";
+  created_by_user_id: string;
+  created_by_name: string;
+  sms_requested: boolean;
+  sms_sent: number;
+  sms_failed: number;
+  sms_skipped: number;
+  created_at: Date;
+};
