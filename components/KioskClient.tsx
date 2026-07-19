@@ -47,6 +47,8 @@ declare global {
   }
 }
 
+const MATCH_COOLDOWN_MS = 2500;
+
 export function KioskClient({
   members,
   services,
@@ -66,13 +68,25 @@ export function KioskClient({
   const streamRef = useRef<MediaStream | null>(null);
   const scanningRef = useRef(false);
   const drawingRef = useRef(false);
+  const clockingRef = useRef(false);
+  const cooldownUntilRef = useRef(0);
+  const lastClockedIdRef = useRef<string | null>(null);
+  const scanActionRef = useRef<"clock_in" | "clock_out">("clock_in");
+  const serviceIdRef = useRef(services[0]?.id ?? "");
 
   const [session, setSession] = useState<"face" | "thumb">("face");
   const [mode, setMode] = useState<"online" | "offline">("online");
   const [message, setMessage] = useState<string | null>(null);
-  const [cameraStatus, setCameraStatus] = useState("Camera off");
+  const [cameraStatus, setCameraStatus] = useState(
+    "Pick a service, then press Face clock in to open the camera.",
+  );
   const [cameraOn, setCameraOn] = useState(false);
+  const [scanAction, setScanAction] = useState<"clock_in" | "clock_out">(
+    "clock_in",
+  );
   const [match, setMatch] = useState<FaceMatch | null>(null);
+  const [flash, setFlash] = useState<string | null>(null);
+  const [todayCount, setTodayCount] = useState(0);
   const [thumbMatch, setThumbMatch] = useState<ThumbMatch | null>(null);
   const [thumbStatus, setThumbStatus] = useState(
     "Press and roll thumb on the pad, then Scan.",
@@ -84,6 +98,14 @@ export function KioskClient({
     () => createFaceMatcher(enrolledFaces),
     [enrolledFaces],
   );
+
+  useEffect(() => {
+    serviceIdRef.current = serviceId;
+  }, [serviceId]);
+
+  useEffect(() => {
+    scanActionRef.current = scanAction;
+  }, [scanAction]);
 
   useEffect(() => {
     void loadFaceModels().catch(() => {});
@@ -116,13 +138,69 @@ export function KioskClient({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
+  async function clockMatched(member: FaceMatch) {
+    if (clockingRef.current) return;
+    if (!serviceIdRef.current) {
+      setCameraStatus("Select a service first.");
+      return;
+    }
+    if (Date.now() < cooldownUntilRef.current) return;
+    if (lastClockedIdRef.current === member.id && Date.now() < cooldownUntilRef.current) {
+      return;
+    }
+
+    clockingRef.current = true;
+    const action = scanActionRef.current;
+    setCameraStatus(
+      action === "clock_out"
+        ? `Clocking out ${member.label}…`
+        : `Clocking in ${member.label}…`,
+    );
+
+    try {
+      const res = await fetch("/api/kiosk/clock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          member_id: member.id,
+          service_id: serviceIdRef.current,
+          verify_method: "face",
+          client_event_id: window.APCSync?.uuid?.(),
+        }),
+      });
+      const data = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        status?: string;
+      };
+      if (!data.ok) {
+        setFlash(data.error || "Clock failed");
+        setCameraStatus(data.error || "Clock failed — try again");
+      } else {
+        setTodayCount((n) => n + 1);
+        const verb = action === "clock_out" ? "Out" : "In";
+        const note = data.status ? ` (${data.status})` : "";
+        setFlash(`${verb}: ${member.label}${note}`);
+        setCameraStatus(`Ready — next person (${verb})`);
+        lastClockedIdRef.current = member.id;
+        cooldownUntilRef.current = Date.now() + MATCH_COOLDOWN_MS;
+        setMatch(null);
+      }
+    } catch {
+      setCameraStatus("Network error — retrying…");
+    } finally {
+      clockingRef.current = false;
+    }
+  }
+
   useEffect(() => {
     if (!cameraOn || session !== "face") return;
     let alive = true;
     scanningRef.current = true;
     let frame = 0;
-    let lastMatchId: string | null = null;
     let canvasSized = false;
+    let busy = false;
 
     const drawBox = (
       canvas: HTMLCanvasElement,
@@ -132,41 +210,44 @@ export function KioskClient({
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       if (!canvasSized) {
-        canvas.width = video.videoWidth || 320;
-        canvas.height = video.videoHeight || 240;
+        canvas.width = video.videoWidth || 240;
+        canvas.height = video.videoHeight || 180;
         canvasSized = true;
       }
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (box) {
         ctx.strokeStyle = "#f5c518";
-        ctx.lineWidth = 3;
+        ctx.lineWidth = 2;
         ctx.strokeRect(box.x, box.y, box.width, box.height);
       }
     };
 
     const tick = async () => {
       while (alive && scanningRef.current) {
+        if (busy) {
+          await new Promise((r) => setTimeout(r, 20));
+          continue;
+        }
         const video = videoRef.current;
         const canvas = canvasRef.current;
         if (video && canvas && video.readyState >= 2) {
+          busy = true;
           try {
             frame += 1;
-            const doMatch = frame % 3 === 0;
+            const doMatch = frame % 4 === 0;
 
             if (doMatch) {
               const face = await detectSingleFace(video);
               drawBox(canvas, video, face?.box ?? null);
 
               if (!face) {
-                if (lastMatchId) {
-                  lastMatchId = null;
-                  setMatch(null);
-                }
-                setCameraStatus("Looking for a face…");
-              } else if (!faceMatcher || !enrolledFaces.length) {
-                setCameraStatus("No enrolled faces yet. Enroll members first.");
                 setMatch(null);
-                lastMatchId = null;
+                if (Date.now() >= cooldownUntilRef.current) {
+                  setCameraStatus("Looking for a face…");
+                }
+              } else if (!faceMatcher || !enrolledFaces.length) {
+                setCameraStatus("No enrolled faces yet. Enroll under Members.");
+                setMatch(null);
               } else {
                 const found = matchWithMatcher(
                   face.descriptor,
@@ -174,33 +255,25 @@ export function KioskClient({
                   enrolledFaces,
                 );
                 if (found) {
-                  if (found.id !== lastMatchId) {
-                    lastMatchId = found.id;
-                    setMatch(found);
-                  }
+                  setMatch(found);
                   setCameraStatus(`Matched: ${found.label}`);
+                  await clockMatched(found);
                 } else {
-                  if (lastMatchId) {
-                    lastMatchId = null;
-                    setMatch(null);
-                  }
+                  setMatch(null);
                   setCameraStatus("Face seen — no enrolled match");
                 }
               }
             } else {
               const box = await detectFaceBox(video);
               drawBox(canvas, video, box);
-              if (!box && lastMatchId) {
-                lastMatchId = null;
-                setMatch(null);
-                setCameraStatus("Looking for a face…");
-              }
             }
           } catch {
             setCameraStatus("Detection error — retrying…");
+          } finally {
+            busy = false;
           }
         }
-        await new Promise((r) => setTimeout(r, 40));
+        await new Promise((r) => setTimeout(r, 25));
       }
     };
 
@@ -209,30 +282,48 @@ export function KioskClient({
       alive = false;
       scanningRef.current = false;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOn, enrolledFaces, faceMatcher, session]);
 
-  async function startCamera() {
-    setCameraStatus("Starting camera…");
+  async function startCameraFor(action: "clock_in" | "clock_out") {
+    if (!serviceId) {
+      setCameraStatus("Select a service first.");
+      return;
+    }
+    setScanAction(action);
+    scanActionRef.current = action;
+    setFlash(null);
+    setCameraStatus(
+      action === "clock_out"
+        ? "Opening camera for clock out…"
+        : "Opening camera for clock in…",
+    );
     try {
-      const [, stream] = await Promise.all([
-        loadFaceModels(),
-        navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: "user",
-            width: { ideal: 320 },
-            height: { ideal: 240 },
-            frameRate: { ideal: 24 },
-          },
-          audio: false,
-        }),
-      ]);
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      if (!streamRef.current) {
+        const [, stream] = await Promise.all([
+          loadFaceModels(),
+          navigator.mediaDevices.getUserMedia({
+            video: {
+              facingMode: "user",
+              width: { ideal: 240 },
+              height: { ideal: 180 },
+              frameRate: { ideal: 30 },
+            },
+            audio: false,
+          }),
+        ]);
+        streamRef.current = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          await videoRef.current.play();
+        }
       }
       setCameraOn(true);
-      setCameraStatus("Camera ready");
+      setCameraStatus(
+        action === "clock_out"
+          ? "Scanning for clock out — next person…"
+          : "Scanning for clock in — next person…",
+      );
     } catch (err) {
       setCameraStatus(
         err instanceof Error ? err.message : "Could not start camera",
@@ -247,7 +338,9 @@ export function KioskClient({
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
     setMatch(null);
-    setCameraStatus("Camera off");
+    setCameraStatus(
+      "Pick a service, then press Face clock in to open the camera.",
+    );
   }
 
   function clearThumbPad() {
@@ -330,9 +423,7 @@ export function KioskClient({
     const found = matchThumbprint(descriptor, enrolledThumbs);
     if (found) {
       setThumbMatch(found);
-      setThumbStatus(
-        `Matched: ${found.label} (distance ${found.distance.toFixed(3)})`,
-      );
+      setThumbStatus(`Matched: ${found.label}`);
     } else {
       setThumbMatch(null);
       setThumbStatus("No enrolled thumbprint match. Clear pad and retry.");
@@ -398,45 +489,48 @@ export function KioskClient({
             <span className="badge badge-ok">
               {enrolledThumbs.length} thumb(s)
             </span>
+            {todayCount > 0 && (
+              <span className="badge badge-ok">
+                Scanned this session: {todayCount}
+              </span>
+            )}
           </div>
 
           {session === "face" ? (
             <>
-              <div className="face-video-wrap kiosk-face-wrap">
-                <video ref={videoRef} className="face-video" muted playsInline />
-                <canvas ref={canvasRef} className="face-overlay" />
-                {!cameraOn && (
-                  <div className="face-video-placeholder">
-                    <h2
-                      style={{ margin: "0 0 0.35rem", color: "var(--blue-deep)" }}
-                    >
-                      Facial clock-in
-                    </h2>
-                    <p className="empty-hint" style={{ margin: 0 }}>
-                      Start the camera, stand in frame, then clock in when
-                      matched.
-                    </p>
-                  </div>
-                )}
+              <div className="field">
+                <label>Service</label>
+                <select
+                  required
+                  value={serviceId}
+                  onChange={(e) => setServiceId(e.target.value)}
+                >
+                  {services.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title} · {new Date(s.starts_at).toLocaleTimeString()}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <p className="face-status">{cameraStatus}</p>
-              {match && (
-                <div className="alert alert-success face-match-banner">
-                  Recognized <strong>{match.label}</strong>
-                </div>
-              )}
-
-              <div className="row-actions" style={{ marginBottom: "1rem" }}>
-                {!cameraOn ? (
-                  <button
-                    type="button"
-                    className="btn btn-accent"
-                    onClick={startCamera}
-                  >
-                    Start camera
-                  </button>
-                ) : (
+              <div className="row-actions" style={{ marginBottom: "0.85rem" }}>
+                <button
+                  type="button"
+                  className={`btn ${scanAction === "clock_in" && cameraOn ? "btn-accent" : "btn-accent"}`}
+                  onClick={() => startCameraFor("clock_in")}
+                  disabled={!serviceId}
+                >
+                  Face clock in
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-outline"
+                  onClick={() => startCameraFor("clock_out")}
+                  disabled={!serviceId}
+                >
+                  Face clock out
+                </button>
+                {cameraOn && (
                   <button
                     type="button"
                     className="btn btn-outline"
@@ -447,49 +541,35 @@ export function KioskClient({
                 )}
               </div>
 
-              <form
-                action={kioskClock}
-                onSubmit={(e) => fillEventId(e.currentTarget)}
-              >
-                <input type="hidden" name="client_event_id" />
-                <input type="hidden" name="verify_method" value="face" />
-                <input type="hidden" name="member_id" value={match?.id ?? ""} />
-                <div className="field">
-                  <label>Service</label>
-                  <select
-                    name="service_id"
-                    required
-                    value={serviceId}
-                    onChange={(e) => setServiceId(e.target.value)}
-                  >
-                    {services.map((s) => (
-                      <option key={s.id} value={s.id}>
-                        {s.title} · {new Date(s.starts_at).toLocaleTimeString()}
-                      </option>
-                    ))}
-                  </select>
+              <div className="face-video-wrap kiosk-face-wrap">
+                <video ref={videoRef} className="face-video" muted playsInline />
+                <canvas ref={canvasRef} className="face-overlay" />
+                {!cameraOn && (
+                  <div className="face-video-placeholder">
+                    <h2
+                      style={{ margin: "0 0 0.35rem", color: "var(--blue-deep)" }}
+                    >
+                      Ready to scan
+                    </h2>
+                    <p className="empty-hint" style={{ margin: 0 }}>
+                      Press Face clock in — camera opens and clocks each match
+                      automatically.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <p className="face-status">{cameraStatus}</p>
+              {flash && (
+                <div className="alert alert-success face-match-banner">
+                  {flash}
                 </div>
-                <div className="row-actions">
-                  <button
-                    className="btn btn-accent"
-                    type="submit"
-                    name="action"
-                    value="clock_in"
-                    disabled={!match || !serviceId}
-                  >
-                    Face clock in
-                  </button>
-                  <button
-                    className="btn btn-outline"
-                    type="submit"
-                    name="action"
-                    value="clock_out"
-                    disabled={!match || !serviceId}
-                  >
-                    Face clock out
-                  </button>
+              )}
+              {match && !flash && (
+                <div className="alert alert-info face-match-banner">
+                  Recognizing <strong>{match.label}</strong>…
                 </div>
-              </form>
+              )}
             </>
           ) : (
             <>
@@ -666,7 +746,7 @@ export function KioskClient({
       </div>
 
       <div>
-        <div className="panel-card" style={{ marginBottom: "1rem" }}>
+        <div className="panel-card">
           <h3>Device</h3>
           {!device ? (
             <p className="empty-hint">No device seeded. Run npm run seed.</p>
@@ -683,23 +763,6 @@ export function KioskClient({
               </span>
             </>
           )}
-        </div>
-        <div className="panel-card">
-          <h3>Biometric sessions</h3>
-          <ul style={{ fontSize: "0.9rem", margin: 0, paddingLeft: "1.1rem" }}>
-            <li>
-              Enroll face and thumb under{" "}
-              <strong>Members → Edit</strong>.
-            </li>
-            <li>
-              <strong>Face session</strong> — camera match, then clock in/out.
-            </li>
-            <li>
-              <strong>Thumbprint session</strong> — press pad, Scan, then clock
-              in/out.
-            </li>
-            <li>Manual select remains available as a fallback.</li>
-          </ul>
         </div>
       </div>
     </div>

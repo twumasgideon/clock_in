@@ -20,6 +20,7 @@ import { writeAudit } from "@/lib/audit";
 import { createHash, randomBytes } from "crypto";
 import { toId } from "@/lib/types";
 import { sendSmsToPhones } from "@/lib/sms";
+import { performKioskClock } from "@/lib/kiosk-clock";
 
 export async function createMember(formData: FormData) {
   const session = await requireRole("admin", "officer");
@@ -316,7 +317,8 @@ export async function clearMemberThumbprint(memberId: string) {
 
 export async function kioskClock(formData: FormData) {
   const session = await requireRole("admin", "officer");
-  const action = String(formData.get("action") ?? "clock_in");
+  const actionRaw = String(formData.get("action") ?? "clock_in");
+  const action = actionRaw === "clock_out" ? "clock_out" : "clock_in";
   const memberId = String(formData.get("member_id") ?? "");
   const serviceId = String(formData.get("service_id") ?? "");
   const forceOffline = formData.get("force_offline") === "1";
@@ -324,118 +326,30 @@ export async function kioskClock(formData: FormData) {
   const verifyMethod =
     verifyRaw === "face" || verifyRaw === "thumbprint" ? verifyRaw : "manual";
   let clientEventId = String(formData.get("client_event_id") ?? "");
-  if (!clientEventId) clientEventId = randomBytes(16).toString("hex");
 
-  if (!ObjectId.isValid(memberId) || !ObjectId.isValid(serviceId)) {
+  const result = await performKioskClock({
+    action,
+    memberId,
+    serviceId,
+    verifyMethod,
+    forceOffline,
+    clientEventId: clientEventId || undefined,
+    userId: session.user.id,
+  });
+
+  if (!result.ok) {
     redirect("/kiosk?error=select");
-  }
-
-  const devices = await getCollection<DeviceDoc>("devices");
-  const device = await devices.findOne({ is_active: true }, { sort: { created_at: 1 } });
-  const now = new Date();
-
-  if (forceOffline) {
-    if (!device) redirect("/kiosk?error=nodevice");
-    const queue = await getCollection<SyncQueueDoc>("sync_queue");
-    const existing = await queue.findOne({
-      device_id: toId(device._id),
-      client_event_id: clientEventId,
-    });
-    if (!existing) {
-      await queue.insertOne({
-        device_id: toId(device._id),
-        client_event_id: clientEventId,
-        event_type: action === "clock_out" ? "clock_out" : "clock_in",
-        payload: {
-          member_id: memberId,
-          service_id: serviceId,
-          verify_method: verifyMethod,
-          status: "present",
-          action,
-        },
-        status: "pending",
-        attempts: 0,
-        last_error: null,
-        device_timestamp: now,
-        received_at: now,
-        synced_at: null,
-      });
-    }
-    await writeAudit({
-      actor_user_id: session.user.id,
-      action: "kiosk.offline_queue",
-      meta: { memberId, serviceId, verifyMethod },
-    });
-    revalidatePath("/kiosk");
-    revalidatePath("/devices");
-    redirect("/kiosk?queued=1");
-  }
-
-  const attendance = await getCollection<AttendanceDoc>("attendance");
-  const services = await getCollection<ServiceDoc>("services");
-
-  if (action === "clock_out") {
-    await attendance.updateOne(
-      { member_id: memberId, service_id: serviceId },
-      { $set: { clock_out_at: now, updated_at: now } },
-    );
-    await writeAudit({
-      actor_user_id: session.user.id,
-      action: "kiosk.clock_out",
-      meta: { memberId, serviceId, verifyMethod },
-    });
-  } else {
-    const service = await services.findOne({ _id: new ObjectId(serviceId) });
-    let status: AttendanceDoc["status"] = "present";
-    if (service) {
-      const lateAt =
-        new Date(service.starts_at).getTime() +
-        (service.late_after_minutes ?? 15) * 60 * 1000;
-      if (Date.now() > lateAt) status = "late";
-    }
-    const existing = await attendance.findOne({
-      member_id: memberId,
-      service_id: serviceId,
-    });
-    if (existing) {
-      await attendance.updateOne(
-        { _id: existing._id },
-        {
-          $set: {
-            clock_in_at: existing.clock_in_at ?? now,
-            status,
-            verify_method: verifyMethod,
-            updated_at: now,
-          },
-        },
-      );
-    } else {
-      await attendance.insertOne({
-        member_id: memberId,
-        service_id: serviceId,
-        clock_in_at: now,
-        clock_out_at: null,
-        status,
-        verify_method: verifyMethod,
-        source_mode: "online",
-        device_id: device ? toId(device._id) : null,
-        client_event_id: clientEventId,
-        synced_from_offline: false,
-        notes: null,
-        created_at: now,
-        updated_at: now,
-      });
-    }
-    await writeAudit({
-      actor_user_id: session.user.id,
-      action: "kiosk.clock_in",
-      meta: { memberId, serviceId, status, verifyMethod },
-    });
   }
 
   revalidatePath("/kiosk");
   revalidatePath("/");
   revalidatePath("/attendance");
+  revalidatePath("/follow-up");
+  revalidatePath("/devices");
+
+  if (result.queued) {
+    redirect("/kiosk?queued=1");
+  }
   redirect("/kiosk?ok=1");
 }
 

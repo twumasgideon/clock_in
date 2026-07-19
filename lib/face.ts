@@ -7,8 +7,8 @@ export const MATCH_THRESHOLD = 0.55;
 
 /** TinyFaceDetector input sizes must be multiples of 32. Smaller = faster. */
 const DETECT_OPTIONS = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 160,
-  scoreThreshold: 0.45,
+  inputSize: 128,
+  scoreThreshold: 0.4,
 });
 
 let modelsReady: Promise<void> | null = null;
