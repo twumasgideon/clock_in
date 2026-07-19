@@ -15,6 +15,8 @@ export function FaceEnroll({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const capturingRef = useRef(false);
+  const stableRef = useRef(0);
   const [status, setStatus] = useState<string>(
     enrolled ? "Face already enrolled." : "Camera off.",
   );
@@ -28,9 +30,74 @@ export function FaceEnroll({
     };
   }, []);
 
+  useEffect(() => {
+    if (!cameraOn || isEnrolled) return;
+    let alive = true;
+
+    const loop = async () => {
+      while (alive && !capturingRef.current) {
+        const video = videoRef.current;
+        if (video && video.readyState >= 2) {
+          try {
+            const face = await detectSingleFace(video);
+            if (face) {
+              stableRef.current += 1;
+              setStatus(
+                `Face found — hold still (${stableRef.current}/3)…`,
+              );
+              if (stableRef.current >= 3) {
+                await autoCapture(face.descriptor);
+                break;
+              }
+            } else {
+              stableRef.current = 0;
+              setStatus("Looking for your face… center in the frame");
+            }
+          } catch {
+            setStatus("Detection error — retrying…");
+          }
+        }
+        await new Promise((r) => setTimeout(r, 280));
+      }
+    };
+
+    void loop();
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraOn, isEnrolled, memberId, memberName]);
+
+  async function autoCapture(descriptor: Float32Array) {
+    if (capturingRef.current) return;
+    capturingRef.current = true;
+    setBusy(true);
+    setStatus("Face captured — saving…");
+    try {
+      const res = await enrollMemberFace(memberId, Array.from(descriptor));
+      if (!res.ok) {
+        setStatus(res.error || "Failed to save face.");
+        capturingRef.current = false;
+        stableRef.current = 0;
+        return;
+      }
+      setIsEnrolled(true);
+      setStatus(`Enrolled face for ${memberName}.`);
+      stopCamera();
+    } catch (err) {
+      setStatus(err instanceof Error ? err.message : "Capture failed.");
+      capturingRef.current = false;
+      stableRef.current = 0;
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startCamera() {
     setBusy(true);
     setStatus("Loading face models…");
+    capturingRef.current = false;
+    stableRef.current = 0;
     try {
       const [, stream] = await Promise.all([
         loadFaceModels(),
@@ -49,7 +116,7 @@ export function FaceEnroll({
         await videoRef.current.play();
       }
       setCameraOn(true);
-      setStatus("Camera ready. Center one face, then capture.");
+      setStatus("Looking for your face… it will capture automatically");
     } catch (err) {
       setStatus(
         err instanceof Error
@@ -66,33 +133,9 @@ export function FaceEnroll({
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
     setCameraOn(false);
+    capturingRef.current = false;
+    stableRef.current = 0;
     setStatus(isEnrolled ? "Face already enrolled." : "Camera off.");
-  }
-
-  async function capture() {
-    if (!videoRef.current) return;
-    setBusy(true);
-    setStatus("Detecting face…");
-    try {
-      const result = await detectSingleFace(videoRef.current);
-      if (!result) {
-        setStatus("No face detected. Improve lighting and try again.");
-        return;
-      }
-      setStatus("Saving face template…");
-      const res = await enrollMemberFace(memberId, Array.from(result.descriptor));
-      if (!res.ok) {
-        setStatus(res.error || "Failed to save face.");
-        return;
-      }
-      setIsEnrolled(true);
-      setStatus(`Enrolled face for ${memberName}.`);
-      stopCamera();
-    } catch (err) {
-      setStatus(err instanceof Error ? err.message : "Capture failed.");
-    } finally {
-      setBusy(false);
-    }
   }
 
   async function clearFace() {
@@ -114,7 +157,8 @@ export function FaceEnroll({
     <div className="panel-card face-enroll" style={{ marginTop: "1rem" }}>
       <h3>Face enrollment</h3>
       <p className="empty-hint" style={{ marginBottom: "0.75rem" }}>
-        Capture one clear face for kiosk clock-in. Good lighting works best.
+        Start the camera and hold your face in frame — it captures
+        automatically when a clear face is found.
       </p>
       <div className="face-video-wrap">
         <video ref={videoRef} className="face-video" muted playsInline />
@@ -140,24 +184,14 @@ export function FaceEnroll({
             {isEnrolled ? "Re-enroll face" : "Start camera"}
           </button>
         ) : (
-          <>
-            <button
-              type="button"
-              className="btn btn-accent"
-              onClick={capture}
-              disabled={busy}
-            >
-              Capture &amp; save
-            </button>
-            <button
-              type="button"
-              className="btn btn-outline"
-              onClick={stopCamera}
-              disabled={busy}
-            >
-              Stop camera
-            </button>
-          </>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={stopCamera}
+            disabled={busy}
+          >
+            Stop camera
+          </button>
         )}
         {isEnrolled && (
           <button

@@ -3,12 +3,12 @@
 import * as faceapi from "@vladmandic/face-api";
 
 const MODEL_URL = "/models";
-export const MATCH_THRESHOLD = 0.55;
+export const MATCH_THRESHOLD = 0.58;
 
-/** TinyFaceDetector input sizes must be multiples of 32. Smaller = faster. */
+/** Balance speed vs finding faces clearly (multiples of 32). */
 const DETECT_OPTIONS = new faceapi.TinyFaceDetectorOptions({
-  inputSize: 128,
-  scoreThreshold: 0.4,
+  inputSize: 224,
+  scoreThreshold: 0.3,
 });
 
 let modelsReady: Promise<void> | null = null;

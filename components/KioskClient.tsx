@@ -47,7 +47,8 @@ declare global {
   }
 }
 
-const MATCH_COOLDOWN_MS = 2500;
+const MATCH_COOLDOWN_MS = 2000;
+const STABLE_MATCHES_NEEDED = 2;
 
 export function KioskClient({
   members,
@@ -72,6 +73,7 @@ export function KioskClient({
   const cooldownUntilRef = useRef(0);
   const lastClockedIdRef = useRef<string | null>(null);
   const clockedInIdsRef = useRef<Set<string>>(new Set());
+  const stableMatchRef = useRef<{ id: string; count: number } | null>(null);
   const scanActionRef = useRef<"clock_in" | "clock_out">("clock_in");
   const serviceIdRef = useRef(services[0]?.id ?? "");
 
@@ -222,31 +224,37 @@ export function KioskClient({
     let frame = 0;
     let canvasSized = false;
     let busy = false;
+    stableMatchRef.current = null;
 
     const drawBox = (
       canvas: HTMLCanvasElement,
       video: HTMLVideoElement,
       box: { x: number; y: number; width: number; height: number } | null,
+      locked = false,
     ) => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
       if (!canvasSized) {
-        canvas.width = video.videoWidth || 240;
-        canvas.height = video.videoHeight || 180;
+        canvas.width = video.videoWidth || 320;
+        canvas.height = video.videoHeight || 240;
         canvasSized = true;
       }
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       if (box) {
-        ctx.strokeStyle = "#f5c518";
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = locked ? "#22c55e" : "#f5c518";
+        ctx.lineWidth = locked ? 3 : 2;
         ctx.strokeRect(box.x, box.y, box.width, box.height);
+        if (locked) {
+          ctx.fillStyle = "rgba(34, 197, 94, 0.12)";
+          ctx.fillRect(box.x, box.y, box.width, box.height);
+        }
       }
     };
 
     const tick = async () => {
       while (alive && scanningRef.current) {
         if (busy) {
-          await new Promise((r) => setTimeout(r, 20));
+          await new Promise((r) => setTimeout(r, 16));
           continue;
         }
         const video = videoRef.current;
@@ -255,20 +263,24 @@ export function KioskClient({
           busy = true;
           try {
             frame += 1;
-            const doMatch = frame % 4 === 0;
+            // Prefer full face+descriptor often so present faces capture quickly
+            const doMatch = frame % 2 === 0;
 
             if (doMatch) {
               const face = await detectSingleFace(video);
-              drawBox(canvas, video, face?.box ?? null);
 
               if (!face) {
+                stableMatchRef.current = null;
                 setMatch(null);
+                drawBox(canvas, video, null);
                 if (Date.now() >= cooldownUntilRef.current) {
-                  setCameraStatus("Looking for a face…");
+                  setCameraStatus("Looking for a face… stand in the frame");
                 }
               } else if (!faceMatcher || !enrolledFaces.length) {
+                drawBox(canvas, video, face.box);
                 setCameraStatus("No enrolled faces yet. Enroll under Members.");
                 setMatch(null);
+                stableMatchRef.current = null;
               } else {
                 const found = matchWithMatcher(
                   face.descriptor,
@@ -276,17 +288,38 @@ export function KioskClient({
                   enrolledFaces,
                 );
                 if (found) {
+                  const prev = stableMatchRef.current;
+                  const count =
+                    prev?.id === found.id ? prev.count + 1 : 1;
+                  stableMatchRef.current = { id: found.id, count };
                   setMatch(found);
-                  setCameraStatus(`Matched: ${found.label}`);
-                  await clockMatched(found);
+
+                  if (count < STABLE_MATCHES_NEEDED) {
+                    drawBox(canvas, video, face.box, false);
+                    setCameraStatus(
+                      `Face found: ${found.label} — hold still…`,
+                    );
+                  } else {
+                    drawBox(canvas, video, face.box, true);
+                    setCameraStatus(`Capturing ${found.label}…`);
+                    await clockMatched(found);
+                    stableMatchRef.current = null;
+                  }
                 } else {
+                  stableMatchRef.current = null;
                   setMatch(null);
-                  setCameraStatus("Face seen — no enrolled match");
+                  drawBox(canvas, video, face.box, false);
+                  setCameraStatus("Face found — not enrolled / no match");
                 }
               }
             } else {
               const box = await detectFaceBox(video);
-              drawBox(canvas, video, box);
+              drawBox(
+                canvas,
+                video,
+                box,
+                Boolean(stableMatchRef.current && stableMatchRef.current.count >= 1),
+              );
             }
           } catch {
             setCameraStatus("Detection error — retrying…");
@@ -294,7 +327,7 @@ export function KioskClient({
             busy = false;
           }
         }
-        await new Promise((r) => setTimeout(r, 25));
+        await new Promise((r) => setTimeout(r, 20));
       }
     };
 
@@ -313,10 +346,11 @@ export function KioskClient({
     setScanAction(action);
     scanActionRef.current = action;
     setFlash(null);
+    stableMatchRef.current = null;
     setCameraStatus(
       action === "clock_out"
         ? "Opening camera for clock out…"
-        : "Opening camera for clock in…",
+        : "Opening camera — looking for faces…",
     );
     try {
       if (!streamRef.current) {
@@ -325,8 +359,8 @@ export function KioskClient({
           navigator.mediaDevices.getUserMedia({
             video: {
               facingMode: "user",
-              width: { ideal: 240 },
-              height: { ideal: 180 },
+              width: { ideal: 320 },
+              height: { ideal: 240 },
               frameRate: { ideal: 30 },
             },
             audio: false,
@@ -341,8 +375,8 @@ export function KioskClient({
       setCameraOn(true);
       setCameraStatus(
         action === "clock_out"
-          ? "Scanning for clock out — next person…"
-          : "Scanning for clock in — next person…",
+          ? "Stand in frame — auto clock out when face is captured"
+          : "Stand in frame — auto clock in when face is captured",
       );
     } catch (err) {
       setCameraStatus(
@@ -572,7 +606,7 @@ export function KioskClient({
                       Ready to scan
                     </h2>
                     <p className="empty-hint" style={{ margin: 0 }}>
-                      Press Face clock in — camera opens and clocks each match
+                      Press Face clock in — camera finds the face and captures
                       automatically.
                     </p>
                   </div>
