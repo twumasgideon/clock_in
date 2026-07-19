@@ -71,6 +71,7 @@ export function KioskClient({
   const clockingRef = useRef(false);
   const cooldownUntilRef = useRef(0);
   const lastClockedIdRef = useRef<string | null>(null);
+  const clockedInIdsRef = useRef<Set<string>>(new Set());
   const scanActionRef = useRef<"clock_in" | "clock_out">("clock_in");
   const serviceIdRef = useRef(services[0]?.id ?? "");
 
@@ -101,6 +102,7 @@ export function KioskClient({
 
   useEffect(() => {
     serviceIdRef.current = serviceId;
+    clockedInIdsRef.current = new Set();
   }, [serviceId]);
 
   useEffect(() => {
@@ -145,12 +147,21 @@ export function KioskClient({
       return;
     }
     if (Date.now() < cooldownUntilRef.current) return;
-    if (lastClockedIdRef.current === member.id && Date.now() < cooldownUntilRef.current) {
+
+    const action = scanActionRef.current;
+    if (
+      action === "clock_in" &&
+      clockedInIdsRef.current.has(member.id)
+    ) {
+      setFlash(`Already clocked in: ${member.label}`);
+      setCameraStatus(`Already clocked in — next person`);
+      cooldownUntilRef.current = Date.now() + MATCH_COOLDOWN_MS;
+      lastClockedIdRef.current = member.id;
+      setMatch(null);
       return;
     }
 
     clockingRef.current = true;
-    const action = scanActionRef.current;
     setCameraStatus(
       action === "clock_out"
         ? `Clocking out ${member.label}…`
@@ -175,18 +186,29 @@ export function KioskClient({
         status?: string;
       };
       if (!data.ok) {
-        setFlash(data.error || "Clock failed");
-        setCameraStatus(data.error || "Clock failed — try again");
+        const err = data.error || "Clock failed";
+        setFlash(err);
+        setCameraStatus(
+          err.toLowerCase().includes("already")
+            ? `${err} — next person`
+            : err,
+        );
+        if (err.toLowerCase().includes("already clocked in")) {
+          clockedInIdsRef.current.add(member.id);
+        }
       } else {
+        if (action === "clock_in") {
+          clockedInIdsRef.current.add(member.id);
+        }
         setTodayCount((n) => n + 1);
         const verb = action === "clock_out" ? "Out" : "In";
         const note = data.status ? ` (${data.status})` : "";
         setFlash(`${verb}: ${member.label}${note}`);
         setCameraStatus(`Ready — next person (${verb})`);
         lastClockedIdRef.current = member.id;
-        cooldownUntilRef.current = Date.now() + MATCH_COOLDOWN_MS;
         setMatch(null);
       }
+      cooldownUntilRef.current = Date.now() + MATCH_COOLDOWN_MS;
     } catch {
       setCameraStatus("Network error — retrying…");
     } finally {

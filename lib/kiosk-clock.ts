@@ -51,6 +51,17 @@ export async function performKioskClock(
 
   if (forceOffline) {
     if (!device) return { ok: false, error: "No device configured" };
+    if (action === "clock_in") {
+      const attendance = await getCollection<AttendanceDoc>("attendance");
+      const already = await attendance.findOne({
+        member_id: memberId,
+        service_id: serviceId,
+        clock_in_at: { $ne: null },
+      });
+      if (already) {
+        return { ok: false, error: "Already clocked in for this service" };
+      }
+    }
     const queue = await getCollection<SyncQueueDoc>("sync_queue");
     const existing = await queue.findOne({
       device_id: toId(device._id),
@@ -88,8 +99,18 @@ export async function performKioskClock(
   const services = await getCollection<ServiceDoc>("services");
 
   if (action === "clock_out") {
+    const existingOut = await attendance.findOne({
+      member_id: memberId,
+      service_id: serviceId,
+    });
+    if (!existingOut?.clock_in_at) {
+      return { ok: false, error: "Not clocked in yet for this service" };
+    }
+    if (existingOut.clock_out_at) {
+      return { ok: false, error: "Already clocked out for this service" };
+    }
     await attendance.updateOne(
-      { member_id: memberId, service_id: serviceId },
+      { _id: existingOut._id },
       { $set: { clock_out_at: now, updated_at: now } },
     );
     await writeAudit({
@@ -98,6 +119,14 @@ export async function performKioskClock(
       meta: { memberId, serviceId, verifyMethod },
     });
     return { ok: true, memberId };
+  }
+
+  const existing = await attendance.findOne({
+    member_id: memberId,
+    service_id: serviceId,
+  });
+  if (existing?.clock_in_at) {
+    return { ok: false, error: "Already clocked in for this service" };
   }
 
   const service = await services.findOne({ _id: new ObjectId(serviceId) });
@@ -109,16 +138,12 @@ export async function performKioskClock(
     if (Date.now() > lateAt) status = "late";
   }
 
-  const existing = await attendance.findOne({
-    member_id: memberId,
-    service_id: serviceId,
-  });
   if (existing) {
     await attendance.updateOne(
       { _id: existing._id },
       {
         $set: {
-          clock_in_at: existing.clock_in_at ?? now,
+          clock_in_at: now,
           status,
           verify_method: verifyMethod,
           updated_at: now,
