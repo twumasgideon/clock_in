@@ -18,7 +18,6 @@ import type {
 } from "@/lib/models";
 import { writeAudit } from "@/lib/audit";
 import { createHash, randomBytes } from "crypto";
-import { toId } from "@/lib/types";
 import { sendSmsToPhones } from "@/lib/sms";
 import { performKioskClock } from "@/lib/kiosk-clock";
 
@@ -325,7 +324,7 @@ export async function kioskClock(formData: FormData) {
   const verifyRaw = String(formData.get("verify_method") ?? "manual");
   const verifyMethod =
     verifyRaw === "face" || verifyRaw === "thumbprint" ? verifyRaw : "manual";
-  let clientEventId = String(formData.get("client_event_id") ?? "");
+  const clientEventId = String(formData.get("client_event_id") ?? "");
 
   const result = await performKioskClock({
     action,

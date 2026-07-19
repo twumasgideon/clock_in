@@ -137,7 +137,6 @@ export function KioskClient({
       stopCamera();
       clearThumbPad();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session]);
 
   async function clockMatched(member: FaceMatch) {
@@ -304,7 +303,6 @@ export function KioskClient({
       alive = false;
       scanningRef.current = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cameraOn, enrolledFaces, faceMatcher, session]);
 
   async function startCameraFor(action: "clock_in" | "clock_out") {
